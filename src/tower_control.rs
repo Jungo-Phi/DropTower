@@ -2,6 +2,8 @@ use eframe::{App, CreationContext, egui, Frame};
 use eframe::egui::{Context, Ui, Slider, Image};
 use crate::toggle_switch;
 use egui_extras::install_image_loaders;
+use crate::custom_widgets::Lamp;
+use crate::toggle_switch::Toggle;
 
 
 pub struct TowerControl {
@@ -29,6 +31,7 @@ impl TowerControl {
 			});
 			if ui.button("Exit").clicked() {
 				todo!("close") //frame.close();
+				//ui.close_menu();
 			}
 		});
 	}
@@ -39,9 +42,11 @@ impl TowerControl {
 			ui.add_space(5.);
 		});
 		
-		ui.checkbox(&mut self.a, "A");
 		ui.label(format!("Selected: {}", self.b));
-		ui.add(toggle_switch::toggle(&mut self.a));
+		
+		ui.checkbox(&mut self.a, "A");
+		ui.add(Toggle::new(&mut self.a));
+		ui.add(Lamp::new(&self.a));
 	}
 	
 	fn right_panel(&mut self, _ctx: &Context, _frame: &mut Frame, ui: &mut Ui) {
@@ -73,9 +78,7 @@ impl TowerControl {
 				});
 			});
 		});
-		// let gear_image = load_image_from_path(Path::new("assets/gear_icon.png"));
-		// let gear_texture = ctx.load_texture("gear-image", gear_image, Default::default());
-		// ui.image(&gear_texture, gear_texture.size_vec2());
+		
 		ui.add(
 			Image::new(egui::include_image!("../assets/gear_icon.png"))
 			//.rounding(5.0)
