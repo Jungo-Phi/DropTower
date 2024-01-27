@@ -1,8 +1,7 @@
-use std::path::Path;
 use eframe::{App, CreationContext, egui, Frame};
-use eframe::egui::{Context, Ui, Slider};
+use eframe::egui::{Context, Ui, Slider, Image};
 use crate::toggle_switch;
-use crate::utils::load_image_from_path;
+use egui_extras::install_image_loaders;
 
 
 pub struct TowerControl {
@@ -29,7 +28,7 @@ impl TowerControl {
 				ui.selectable_value(&mut self.b, 3, "3");
 			});
 			if ui.button("Exit").clicked() {
-				frame.close();
+				todo!("close") //frame.close();
 			}
 		});
 	}
@@ -77,12 +76,17 @@ impl TowerControl {
 		// let gear_image = load_image_from_path(Path::new("assets/gear_icon.png"));
 		// let gear_texture = ctx.load_texture("gear-image", gear_image, Default::default());
 		// ui.image(&gear_texture, gear_texture.size_vec2());
+		ui.add(
+			Image::new(egui::include_image!("../assets/gear_icon.png"))
+			//.rounding(5.0)
+		);
 	}
 }
 
 
 impl App for TowerControl {
 	fn update(&mut self, ctx: &Context, frame: &mut Frame) {
+		install_image_loaders(ctx);
 		// Basically the layout of the panels
 		egui::CentralPanel::default().show(ctx, |ui| {
 			egui::TopBottomPanel::top("top_panel")
