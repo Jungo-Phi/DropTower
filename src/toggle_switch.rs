@@ -1,4 +1,5 @@
-use eframe::egui::{Ui, Response, vec2, Sense, WidgetInfo, WidgetType, lerp, pos2, Widget};
+use eframe::egui::{Ui, Response, vec2, Sense, WidgetInfo, WidgetType, lerp, pos2, Widget, WidgetText};
+
 
 pub struct Toggle;
 

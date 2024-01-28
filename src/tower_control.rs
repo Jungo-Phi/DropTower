@@ -1,9 +1,17 @@
 use eframe::{App, CreationContext, egui, Frame};
-use eframe::egui::{Context, Ui, Slider, Image};
-use crate::toggle_switch;
+use eframe::egui::{Context, Image, Slider, Ui};
 use egui_extras::install_image_loaders;
-use crate::custom_widgets::Lamp;
-use crate::toggle_switch::Toggle;
+use crate::crash_data::{CrashData, CrashResults};
+use crate::custom_widgets::{ui_lamp};
+
+
+enum ScreenState {
+	First,
+	CrashData(CrashData),
+	AreYouReadyToCrash(CrashData),
+	ReadyToCrash(CrashData),
+	Results(CrashData, CrashResults)
+}
 
 
 pub struct TowerControl {
@@ -45,8 +53,6 @@ impl TowerControl {
 		ui.label(format!("Selected: {}", self.b));
 		
 		ui.checkbox(&mut self.a, "A");
-		ui.add(Toggle::new(&mut self.a));
-		ui.add(Lamp::new(&self.a));
 	}
 	
 	fn right_panel(&mut self, _ctx: &Context, _frame: &mut Frame, ui: &mut Ui) {
@@ -58,6 +64,9 @@ impl TowerControl {
 		let _ = ui.radio(true, "Impacteur chargé");
 		let _ = ui.radio(false, "Clamps fermés");
 		let _ = ui.radio(true, "Porte fermée");
+		ui_lamp(ui, &self.a, "Percuteur chargé");
+		ui_lamp(ui, &self.a, "Clamps fermés");
+		ui_lamp(ui, &self.a, "Porte fermée");
 		
 		ui.separator();
 		
