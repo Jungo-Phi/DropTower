@@ -1,13 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct CrashData {
-    author: String,
-    comment: String,
-    //date: u64,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct CrashResults {
-    speed: f64,
+	pub name: String,
+	pub author: String,
+	pub comment: String,
+	//date: u64,
 }
