@@ -1,10 +1,16 @@
 use serde::{Deserialize, Serialize};
+use crate::crash_data::CrashData;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct CrashResults {
 	speed: f32,
 }
+
 impl CrashResults {
+	fn new(height: &f32) -> Self {
+		Self { speed: (2. * height / 9.81).sqrt() }
+	}
+	
 	pub fn get_speed(&self) -> &f32 {
 		&self.speed
 	}
@@ -32,4 +38,21 @@ impl TowerSimulation {
 	pub fn is_clamps_closed(&self) -> &bool { &self.clamps_closed }
 	pub fn is_magnet_closed(&self) -> &bool { &self.magnet_closed }
 	pub fn is_door_closed(&self) -> &bool { &self.door_closed }
+	
+	/// Debug fn
+	pub fn make_everything_ok(&mut self) {
+		self.impactor_charged = true;
+		self.clamps_closed = true;
+		self.magnet_closed = true;
+		self.door_closed = true;
+	}
+	
+	pub fn launch_crash(&mut self) {
+		self.clamps_closed = false;
+		self.magnet_closed = false;
+	}
+	
+	pub fn get_crash_results(&self) -> CrashResults {
+		CrashResults::new(&self.height)
+	}
 }

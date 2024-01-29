@@ -1,5 +1,4 @@
 mod tower_control;
-mod toggle_switch;
 mod utils;
 mod crash_data;
 mod custom_widgets;
@@ -13,6 +12,8 @@ use image::load_from_memory;
 
 
 fn main() -> Result<(), eframe::Error> {
+	// if cfg!(target_os = "macos") { panic!("Does not work on MacOS") }
+	
 	let icon = {
 		let image = load_from_memory(include_bytes!("../assets/drop_tower_icon.png"))
 		.expect("Failed to open icon path")

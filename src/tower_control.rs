@@ -1,12 +1,18 @@
+use std::fs::read_to_string;
+use std::path::Path;
+use chrono::Local;
 use eframe::{App, CreationContext, egui, Frame};
-use eframe::egui::{Context, Image, ProgressBar, Ui};
+use eframe::egui::{Align, Button, Context, Direction, Image, Layout, ProgressBar, Ui, Vec2};
 use egui_extras::install_image_loaders;
+use rfd::FileDialog;
 use crate::crash_data::CrashData;
 use crate::custom_widgets::{add_lamp};
 use crate::tower_simulation::{CrashResults, TowerSimulation};
 
 
+#[derive(Default)]
 enum ScreenState {
+	#[default]
 	First,
 	CrashDataEntry,
 	Confirmation,
@@ -15,7 +21,7 @@ enum ScreenState {
 	Results(CrashResults),
 }
 
-
+#[derive(Default)]
 pub struct TowerControl {
 	camera_in_place: bool,
 	object_in_place: bool,
@@ -23,30 +29,49 @@ pub struct TowerControl {
 	crash_data: CrashData,
 	screen_state: ScreenState,
 	sim: TowerSimulation,
+	save_path: Option<String>,
 }
 
+
 impl TowerControl {
-	pub fn new(_cc: &CreationContext) -> Self {
-		Self {
-			camera_in_place: false,
-			object_in_place: false,
-			error_window: None,
-			crash_data: CrashData::default(),
-			screen_state: ScreenState::First,
-			sim: TowerSimulation::default(),
+	pub fn new(_cc: &CreationContext) -> Self { Self::default() }
+	
+	fn load(&self) {
+		println!("LOAD");
+		let contents = read_to_string(self.save_path.clone().unwrap()).expect("Couldn't find or load that file.");
+		println!("{}", contents);
+	}
+	
+	fn save(&self) {
+		if let ScreenState::Results(crash_results) = &self.screen_state {
+			println!("SAVE");
+			// TODO Save
 		}
 	}
-}
-
-
-impl TowerControl {
+	
+	fn get_time(&self, ui: &mut Ui) {
+		ui.separator();
+		ui.label("Time");
+		if ui.button("get time").clicked() {
+			let now = Local::now();
+			println!("{}", now);
+		}
+	}
+	
 	fn menus(&mut self, _ctx: &Context, ui: &mut Ui) {
 		ui.menu_button("File", |ui| {
 			if ui.button("Nouveau").clicked() {
 				todo!("Nouveau");
 			}
-			if ui.button("Ouvrir").clicked() {
-				todo!("Ouvrir");
+			if ui.button("Ouvrir un fichier…").clicked() {
+				if let Some(path) = FileDialog::new()
+					.add_filter("JSON", &["json"])
+					.set_directory(Path::new(r"C:\Users"))
+					.pick_file() {
+					self.save_path = Some(path.display().to_string());
+					self.load();
+				}
+				ui.close_menu();
 			}
 			if ui.button("Enregistrer").clicked() {
 				todo!("Enregistrer");
@@ -112,12 +137,14 @@ impl TowerControl {
 			ui.label("Commentaire:");
 			ui.strong(&self.crash_data.comment);
 		});
+		
+		self.get_time(ui);
 	}
 	
 	fn central_panel(&mut self, _ctx: &Context, ui: &mut Ui) {
 		match &self.screen_state {
 			ScreenState::First => {
-				ui.centered_and_justified(|ui| {
+				ui.vertical_centered(|ui| {
 					if ui.button("Nouveau").clicked() {
 						self.screen_state = ScreenState::CrashDataEntry;
 					}
@@ -143,6 +170,9 @@ impl TowerControl {
 			ScreenState::Confirmation => {
 				ui.checkbox(&mut self.camera_in_place, "Caméra installée");
 				ui.checkbox(&mut self.object_in_place, "Objet en place");
+				if ui.button("Make everything ok").clicked() {
+					self.sim.make_everything_ok();
+				}
 				
 				ui.centered_and_justified(|ui| {
 					if ui.button("Passer au largage").clicked() {
@@ -172,21 +202,24 @@ impl TowerControl {
 				});
 			}
 			ScreenState::ReadyToCrash => {
-				ui.centered_and_justified(|ui| {
+				ui.vertical_centered(|ui| {
 					if ui.button("Confirmer largage").clicked() {
 						self.screen_state = ScreenState::DataAcquisition;
+						self.sim.launch_crash();
 					}
 				});
 			}
 			ScreenState::DataAcquisition => {
-				ui.centered_and_justified(|ui| {
+				ui.vertical_centered(|ui| {
 					ui.spinner();
+					
+					let crash_results = self.sim.get_crash_results();  // delay
+					self.save();
+					self.screen_state = ScreenState::Results(crash_results);
 				});
 			}
 			ScreenState::Results(crash_results) => {
-				ui.add(
-					Image::new(egui::include_image!("../assets/gear_icon.png")).rounding(5.0)
-				);
+				// ui.add(Image::new(egui::include_image!("../assets/gear_icon.png")).rounding(5.0));
 				ui.horizontal(|ui| {
 					ui.label("Speed:");
 					ui.strong(format!("{:?}", crash_results.get_speed()));

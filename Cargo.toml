@@ -10,3 +10,5 @@ eframe = "0.25.0"
 egui_extras = { version = "0.25.0", features = ["all_loaders"] }
 serde = "1.0.196"
 image = "0.24.8"
+rfd = "0.13.0"
+chrono = { version = "0.4.33", features = ["serde"] }
