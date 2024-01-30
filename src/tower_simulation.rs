@@ -1,21 +1,4 @@
-use serde::{Deserialize, Serialize};
-use crate::crash_data::CrashData;
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct CrashResults {
-	speed: f32,
-}
-
-impl CrashResults {
-	fn new(height: &f32) -> Self {
-		Self { speed: (2. * height / 9.81).sqrt() }
-	}
-	
-	pub fn get_speed(&self) -> &f32 {
-		&self.speed
-	}
-}
-
+use crate::crashtest_data::CrashtestResults;
 
 #[derive(Debug, Default)]
 pub struct TowerSimulation {
@@ -52,7 +35,7 @@ impl TowerSimulation {
 		self.magnet_closed = false;
 	}
 	
-	pub fn get_crash_results(&self) -> CrashResults {
-		CrashResults::new(&self.height)
+	pub fn get_crash_results(&self) -> CrashtestResults {
+		CrashtestResults::new(&self.height)
 	}
 }

@@ -1,20 +1,22 @@
 use std::fs;
 use std::path::Path;
 use chrono::Local;
-use eframe::{App, CreationContext, egui, Frame, Storage};
-use eframe::egui::{Context, ProgressBar, Ui};
+use eframe::{App, CreationContext, egui, Frame};
+use eframe::egui::{Align2, Context, popup_below_widget, ProgressBar, Ui};
 use egui_extras::install_image_loaders;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
-use crate::crash_data::CrashData;
+use crate::crashtest_data::{CrashtestData, CrashtestResults};
 use crate::custom_widgets::{add_lamp};
-use crate::tower_simulation::{CrashResults, TowerSimulation};
+use crate::tower_simulation::TowerSimulation;
 
+
+const APP_DATA_PATH: &str = r"src/app_data.json";
+const SPECIAL_CHARS: [char; 12] = ['<', '>', '.', ':', ',', ';', '“', '/', '\\', '|', '?', '*'];
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct AppData {
 	save_path: Option<String>,
-	n: i16,
 }
 
 
@@ -26,7 +28,7 @@ enum ScreenState {
 	Confirmation,
 	ReadyToCrash,
 	DataAcquisition,
-	Results(CrashResults),
+	Results(CrashtestResults),
 }
 
 #[derive(Default)]
@@ -34,7 +36,8 @@ pub struct TowerControl {
 	camera_in_place: bool,
 	object_in_place: bool,
 	error_window: Option<String>,
-	crash_data: CrashData,
+	crashtest_path: Option<String>,
+	crashtest_data: CrashtestData,
 	screen_state: ScreenState,
 	sim: TowerSimulation,
 	app_data: AppData,
@@ -43,46 +46,40 @@ pub struct TowerControl {
 
 impl TowerControl {
 	pub fn new(_cc: &CreationContext) -> Self {
-		let app_data = serde_json::from_str(&fs::read_to_string(r"src/app_data.json").unwrap()).unwrap();
+		let app_data = serde_json::from_str(&fs::read_to_string(APP_DATA_PATH).unwrap()).unwrap();
 		Self { app_data, ..Default::default() }
 	}
 	
 	fn save_app(&self) {
-		fs::write(r"src/app_data.json", serde_json::to_string(&self.app_data).unwrap()).unwrap();
+		fs::write(APP_DATA_PATH, serde_json::to_string(&self.app_data).unwrap())
+			.expect("Could not save app");
 	}
-	
-	fn get_time(&self, ui: &mut Ui) {
-		ui.separator();
-		ui.label("Time");
-		if ui.button("get time").clicked() {
-			let now = Local::now();
-			println!("{}", now);
+	fn save_crashtest(&self) {
+		if let Some(crashtest_path) = &self.crashtest_path {
+			fs::write(crashtest_path, serde_json::to_string(&self.crashtest_data).unwrap())
+				.expect("Could not save crashtest");
 		}
 	}
 	
 	fn menus(&mut self, _ctx: &Context, ui: &mut Ui) {
 		ui.menu_button("File", |ui| {
-			if ui.button("Nouveau").clicked() {
-				todo!("Nouveau");
+			if ui.button("Nouveau crashtest").clicked() {
+				self.save_crashtest();
+				self.crashtest_data.reset();
+				self.crashtest_path = None;
+				self.screen_state = ScreenState::CrashDataEntry;
 			}
-			if ui.button("Ouvrir un fichier…").clicked() {
-				if let Some(path) = FileDialog::new()
-					.add_filter("JSON", &["json"])
-					.set_directory(Path::new(r"C:\Users"))
-					.pick_file() {
-					self.app_data.save_path = Some(path.display().to_string());
+			if ui.button("Ouvrir un crashtest…").clicked() {
+				let mut file_dialog = FileDialog::new().add_filter("JSON", &["json"]);
+				if let Some(folder_path) = &self.app_data.save_path {
+					file_dialog = file_dialog.set_directory(Path::new(folder_path));
+				}
+				if let Some(path) = file_dialog.pick_file() {
+					self.app_data.save_path = Some(path.to_str().unwrap().to_string());
 				}
 				ui.close_menu();
 			}
-			if ui.button("Dossier de sauvegarde").clicked() {
-				if let Some(path) = FileDialog::new()
-					.set_directory(Path::new(r"C:\Users"))
-					.pick_folder() {
-					self.app_data.save_path = Some(path.display().to_string());
-					self.save_app();
-				}
-				ui.close_menu();
-			}
+			
 			if ui.button("Quitter").clicked() {
 				todo!("Quitter")
 				//frame.close();
@@ -138,20 +135,18 @@ impl TowerControl {
 			ui.heading("Info");
 			ui.add_space(5.);
 		});
-		ui.horizontal(|ui| {
-			ui.label("Nom du test:");
-			ui.strong(&self.crash_data.name);
-		});
-		ui.horizontal(|ui| {
-			ui.label("Auteur:");
-			ui.strong(&self.crash_data.author);
-		});
-		ui.horizontal(|ui| {
-			ui.label("Commentaire:");
-			ui.strong(&self.crash_data.comment);
-		});
+		self.crashtest_data.show_data(ui);
 		
-		self.get_time(ui);
+		let r = ui.button("Open popup");
+		let popup_id = ui.make_persistent_id("popup id");
+		if r.clicked() {
+			ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+		}
+		popup_below_widget(ui, popup_id, &r, |ui| {
+			ui.set_min_width(200.0); // if you want to control the size
+			ui.label("Some more info, or things you can select:");
+			ui.label("…");
+		});
 	}
 	
 	fn central_panel(&mut self, _ctx: &Context, ui: &mut Ui) {
@@ -164,20 +159,28 @@ impl TowerControl {
 				});
 			}
 			ScreenState::CrashDataEntry => {
-				ui.horizontal(|ui| {
-					ui.label("Nom du test:");
-					ui.text_edit_singleline(&mut self.crash_data.name);
-				});
-				ui.horizontal(|ui| {
-					ui.label("Auteur:");
-					ui.text_edit_singleline(&mut self.crash_data.author);
-				});
-				ui.horizontal(|ui| {
-					ui.label("Commentaire:");
-					ui.text_edit_multiline(&mut self.crash_data.comment);
-				});
+				self.crashtest_data.change_data(ui);
+				
 				if ui.button("Ok").clicked() {
-					self.screen_state = ScreenState::Confirmation;
+					if self.crashtest_data.get_name().contains(SPECIAL_CHARS) {
+						self.error_window = Some(
+							"Nom du test incorrect\nUtilisation de charactères spéciaux\n<>.:,;/\\|?*".to_owned()
+						);
+					} else if self.crashtest_data.get_name().is_empty() {
+						self.error_window = Some("Nom du test vide".to_owned());
+					} else {
+						// Définit le path du crashtest
+						if let Some(folder_path) = self.app_data.save_path.to_owned() {
+							self.crashtest_path = Some(folder_path + "\\" + &self.crashtest_data.get_name() + ".json");
+							self.screen_state = ScreenState::Confirmation;
+						} else if let Some(folder_path) = FileDialog::new().pick_folder() {
+							let folder_path = folder_path.to_str().unwrap().to_string();
+							self.app_data.save_path = Some(folder_path.clone());
+							self.save_app();
+							self.crashtest_path = Some(folder_path + "\\" + &self.crashtest_data.get_name() + ".json");
+							self.screen_state = ScreenState::Confirmation;
+						}
+					}
 				}
 			}
 			ScreenState::Confirmation => {
@@ -204,9 +207,9 @@ impl TowerControl {
 							self.error_window = Some(match index {
 								0 => "Installer la caméra",
 								1 => "Installer l'objet de test",
-								2 => "Aimant !",
-								3 => "Clamps !",
-								4 => "Impacteur non chargé",
+								2 => "Défaut aimant !",
+								3 => "Défaut clamps !",
+								4 => "Charger l'impacteur",
 								5 => "Fermer la porte",
 								_ => "not implemented (code error)",
 							}.to_owned());
@@ -217,8 +220,10 @@ impl TowerControl {
 			ScreenState::ReadyToCrash => {
 				ui.vertical_centered(|ui| {
 					if ui.button("Confirmer largage").clicked() {
-						self.screen_state = ScreenState::DataAcquisition;
+						// Launch Crash-test
 						self.sim.launch_crash();
+						self.crashtest_data.set_date_time(Local::now());
+						self.screen_state = ScreenState::DataAcquisition;
 					}
 				});
 			}
@@ -227,15 +232,16 @@ impl TowerControl {
 					ui.spinner();
 					
 					let crash_results = self.sim.get_crash_results();  // delay
-					//self.save();
+					self.crashtest_data.push_results(crash_results.clone());
+					self.save_crashtest();
 					self.screen_state = ScreenState::Results(crash_results);
 				});
 			}
-			ScreenState::Results(crash_results) => {
+			ScreenState::Results(crashtest_results) => {
 				// ui.add(Image::new(egui::include_image!("../assets/gear_icon.png")).rounding(5.0));
 				ui.horizontal(|ui| {
 					ui.label("Speed:");
-					ui.strong(format!("{:?}", crash_results.get_speed()));
+					ui.strong(format!("{:?}", crashtest_results.get_speed()));
 				});
 			}
 		}
@@ -247,17 +253,19 @@ impl App for TowerControl {
 	fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
 		install_image_loaders(ctx);
 		
-		if let Some(error_text) = &self.error_window {
-			let mut open = true;
-			egui::Window::new("ERROR")
-				.open(&mut open)
-				.show(ctx, |ui| {
-					ui.label(error_text);
-				});
-			if !open { self.error_window = None; }
-		}
-		
 		egui::CentralPanel::default().show(ctx, |ui| {
+			if let Some(error_text) = &self.error_window {
+				let mut open = true;
+				egui::Window::new("ERROR")
+					.resizable(false)
+					.collapsible(false)
+					.anchor(Align2::CENTER_CENTER, [0., 0.])
+					.open(&mut open)
+					.show(ctx, |ui| {
+						ui.label(error_text);
+					});
+				if !open { self.error_window = None; }
+			}
 			ui.set_enabled(self.error_window.is_none());
 			
 			egui::TopBottomPanel::top("top_panel")
