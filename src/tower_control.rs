@@ -1,13 +1,21 @@
-use std::fs::read_to_string;
+use std::fs;
 use std::path::Path;
 use chrono::Local;
-use eframe::{App, CreationContext, egui, Frame};
-use eframe::egui::{Align, Button, Context, Direction, Image, Layout, ProgressBar, Ui, Vec2};
+use eframe::{App, CreationContext, egui, Frame, Storage};
+use eframe::egui::{Context, ProgressBar, Ui};
 use egui_extras::install_image_loaders;
 use rfd::FileDialog;
+use serde::{Deserialize, Serialize};
 use crate::crash_data::CrashData;
 use crate::custom_widgets::{add_lamp};
 use crate::tower_simulation::{CrashResults, TowerSimulation};
+
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct AppData {
+	save_path: Option<String>,
+	n: i16,
+}
 
 
 #[derive(Default)]
@@ -29,24 +37,18 @@ pub struct TowerControl {
 	crash_data: CrashData,
 	screen_state: ScreenState,
 	sim: TowerSimulation,
-	save_path: Option<String>,
+	app_data: AppData,
 }
 
 
 impl TowerControl {
-	pub fn new(_cc: &CreationContext) -> Self { Self::default() }
-	
-	fn load(&self) {
-		println!("LOAD");
-		let contents = read_to_string(self.save_path.clone().unwrap()).expect("Couldn't find or load that file.");
-		println!("{}", contents);
+	pub fn new(_cc: &CreationContext) -> Self {
+		let app_data = serde_json::from_str(&fs::read_to_string(r"src/app_data.json").unwrap()).unwrap();
+		Self { app_data, ..Default::default() }
 	}
 	
-	fn save(&self) {
-		if let ScreenState::Results(crash_results) = &self.screen_state {
-			println!("SAVE");
-			// TODO Save
-		}
+	fn save_app(&self) {
+		fs::write(r"src/app_data.json", serde_json::to_string(&self.app_data).unwrap()).unwrap();
 	}
 	
 	fn get_time(&self, ui: &mut Ui) {
@@ -68,13 +70,18 @@ impl TowerControl {
 					.add_filter("JSON", &["json"])
 					.set_directory(Path::new(r"C:\Users"))
 					.pick_file() {
-					self.save_path = Some(path.display().to_string());
-					self.load();
+					self.app_data.save_path = Some(path.display().to_string());
 				}
 				ui.close_menu();
 			}
-			if ui.button("Enregistrer").clicked() {
-				todo!("Enregistrer");
+			if ui.button("Dossier de sauvegarde").clicked() {
+				if let Some(path) = FileDialog::new()
+					.set_directory(Path::new(r"C:\Users"))
+					.pick_folder() {
+					self.app_data.save_path = Some(path.display().to_string());
+					self.save_app();
+				}
+				ui.close_menu();
 			}
 			if ui.button("Quitter").clicked() {
 				todo!("Quitter")
@@ -88,6 +95,12 @@ impl TowerControl {
 		ui.vertical_centered(|ui| {
 			ui.heading("Contrôle");
 			ui.add_space(5.);
+		});
+		
+		ui.group(|ui| {
+			ui.label("AppData:");
+			let save_path = self.app_data.save_path.clone().unwrap_or(" aucun fichier sélectionné".to_string());
+			ui.label(format!("Save path: {}", save_path));
 		});
 		
 		add_lamp(ui, &self.sim.is_impactor_charged(), "Impacteur chargé");
@@ -214,7 +227,7 @@ impl TowerControl {
 					ui.spinner();
 					
 					let crash_results = self.sim.get_crash_results();  // delay
-					self.save();
+					//self.save();
 					self.screen_state = ScreenState::Results(crash_results);
 				});
 			}
@@ -267,4 +280,6 @@ impl App for TowerControl {
 		});
 		//ctx.request_repaint();
 	}
+	
+	fn on_exit(&mut self, _ctx: Option<&eframe::glow::Context>) { self.save_app(); }
 }
