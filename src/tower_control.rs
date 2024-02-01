@@ -2,11 +2,11 @@ use std::fs;
 use std::path::Path;
 use chrono::Local;
 use eframe::{App, CreationContext, egui, Frame};
-use eframe::egui::{Align2, Context, popup_below_widget, ProgressBar, Ui};
+use eframe::egui::{Align2, Button, Context, ProgressBar, Sense, Ui, Widget};
 use egui_extras::install_image_loaders;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
-use crate::crashtest_data::{CrashtestData, CrashtestResults};
+use crate::crashtest_data::CrashtestData;
 use crate::custom_widgets::{add_lamp};
 use crate::tower_simulation::TowerSimulation;
 
@@ -28,7 +28,7 @@ enum ScreenState {
 	Confirmation,
 	ReadyToCrash,
 	DataAcquisition,
-	Results(CrashtestResults),
+	Results,
 }
 
 #[derive(Default)]
@@ -60,14 +60,20 @@ impl TowerControl {
 				.expect("Could not save crashtest");
 		}
 	}
+	fn load_crashtest(&mut self, path: String) {
+		self.crashtest_path = Some(path.clone());
+		self.crashtest_data = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+		self.screen_state = ScreenState::Results;
+	}
 	
-	fn menus(&mut self, _ctx: &Context, ui: &mut Ui) {
+	fn menus(&mut self, ctx: &Context, ui: &mut Ui) {
 		ui.menu_button("File", |ui| {
 			if ui.button("Nouveau crashtest").clicked() {
 				self.save_crashtest();
 				self.crashtest_data.reset();
 				self.crashtest_path = None;
 				self.screen_state = ScreenState::CrashDataEntry;
+				ui.close_menu();
 			}
 			if ui.button("Ouvrir un crashtest…").clicked() {
 				let mut file_dialog = FileDialog::new().add_filter("JSON", &["json"]);
@@ -75,15 +81,22 @@ impl TowerControl {
 					file_dialog = file_dialog.set_directory(Path::new(folder_path));
 				}
 				if let Some(path) = file_dialog.pick_file() {
+					self.load_crashtest(path.to_str().unwrap().to_string());
+				}
+				ui.close_menu();
+			}
+			if ui.button("Changer le dossier d'enregistrement…").clicked() {
+				let mut file_dialog = FileDialog::new();
+				if let Some(folder_path) = &self.app_data.save_path {
+					file_dialog = file_dialog.set_directory(Path::new(folder_path));
+				}
+				if let Some(path) = file_dialog.pick_folder() {
 					self.app_data.save_path = Some(path.to_str().unwrap().to_string());
 				}
 				ui.close_menu();
 			}
-			
 			if ui.button("Quitter").clicked() {
-				todo!("Quitter")
-				//frame.close();
-				//ui.close_menu();
+				ctx.send_viewport_cmd(egui::ViewportCommand::Close);
 			}
 		});
 	}
@@ -94,11 +107,13 @@ impl TowerControl {
 			ui.add_space(5.);
 		});
 		
+		/*
 		ui.group(|ui| {
 			ui.label("AppData:");
 			let save_path = self.app_data.save_path.clone().unwrap_or(" aucun fichier sélectionné".to_string());
 			ui.label(format!("Save path: {}", save_path));
 		});
+		*/
 		
 		add_lamp(ui, &self.sim.is_impactor_charged(), "Impacteur chargé");
 		add_lamp(ui, &self.sim.is_clamps_closed(), "Clamps fermés");
@@ -108,12 +123,13 @@ impl TowerControl {
 		ui.group(|ui| {
 			ui.horizontal(|ui| {
 				ui.vertical(|ui| {
-					ui.add(ProgressBar::new(self.sim.get_height().clone() / TowerSimulation::MAX_HEIGHT).desired_width(100.));
+					ui.add(ProgressBar::new(self.sim.get_height().clone() / TowerSimulation::MAX_HEIGHT).desired_width
+					(100.));
 					ui.label(format!("{:.2}", self.sim.get_height()));
 				});
 				
 				ui.vertical(|ui| {
-					if ui.button("⏫").is_pointer_button_down_on() {
+					if Button::new("⏫").sense(Sense::drag()).ui(ui).dragged() {
 						self.sim.change_height(0.05);
 					}
 					if ui.button("⏶").clicked() {
@@ -122,7 +138,7 @@ impl TowerControl {
 					if ui.button("⏷").clicked() {
 						self.sim.change_height(-0.01);
 					}
-					if ui.button("⏬").is_pointer_button_down_on() {
+					if Button::new("⏬").sense(Sense::drag()).ui(ui).dragged() {
 						self.sim.change_height(-0.05);
 					}
 				});
@@ -137,6 +153,7 @@ impl TowerControl {
 		});
 		self.crashtest_data.show_data(ui);
 		
+		/*
 		let r = ui.button("Open popup");
 		let popup_id = ui.make_persistent_id("popup id");
 		if r.clicked() {
@@ -147,6 +164,7 @@ impl TowerControl {
 			ui.label("Some more info, or things you can select:");
 			ui.label("…");
 		});
+		*/
 	}
 	
 	fn central_panel(&mut self, _ctx: &Context, ui: &mut Ui) {
@@ -232,17 +250,15 @@ impl TowerControl {
 					ui.spinner();
 					
 					let crash_results = self.sim.get_crash_results();  // delay
-					self.crashtest_data.push_results(crash_results.clone());
+					self.crashtest_data.set_results(crash_results, *self.sim.get_height());
 					self.save_crashtest();
-					self.screen_state = ScreenState::Results(crash_results);
+					self.screen_state = ScreenState::Results;
 				});
 			}
-			ScreenState::Results(crashtest_results) => {
+			ScreenState::Results => {
 				// ui.add(Image::new(egui::include_image!("../assets/gear_icon.png")).rounding(5.0));
-				ui.horizontal(|ui| {
-					ui.label("Speed:");
-					ui.strong(format!("{:?}", crashtest_results.get_speed()));
-				});
+				self.crashtest_data.show_results(ui);
+				
 			}
 		}
 	}
@@ -286,7 +302,7 @@ impl App for TowerControl {
 				self.central_panel(ctx, ui);
 			});
 		});
-		//ctx.request_repaint();
+		ctx.request_repaint();
 	}
 	
 	fn on_exit(&mut self, _ctx: Option<&eframe::glow::Context>) { self.save_app(); }
